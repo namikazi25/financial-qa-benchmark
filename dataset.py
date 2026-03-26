@@ -76,7 +76,7 @@ def _normalise_columns(df: pd.DataFrame) -> pd.DataFrame:
 
 
 # ---------------------------------------------------------------------------
-# Curation helpers — these drive benchmark selection
+# Curation helpers
 # ---------------------------------------------------------------------------
 
 def detect_question_type(question: str, answer: str) -> str:
@@ -154,8 +154,9 @@ def build_curated_benchmark(
     """
     Build the frozen 50-row benchmark.
 
-    40 standard rows: clearly answerable from context, balanced across question types.
-    10 edge-case rows: weak context, truncated snippets, low overlap — tests abstention.
+    Selection is heuristic-based, not manually labelled:
+    - 40 standard rows: clearly answerable from context, stratified by question type
+    - 10 edge-case rows: weak context flagged by overlap, length, and truncation heuristics
     """
     df = load_dataset(csv_path).reset_index(drop=True)
 
@@ -169,7 +170,7 @@ def build_curated_benchmark(
         lambda r: _token_overlap(r["reference_answer"], r["context"]), axis=1
     )
 
-    edge_pool = df[df["edge_case_reason"] != ""].copy()
+    edge_pool     = df[df["edge_case_reason"] != ""].copy()
     standard_pool = df[df["edge_case_reason"] == ""].copy()
 
     if len(edge_pool) < n_edge:
@@ -178,10 +179,9 @@ def build_curated_benchmark(
             "Try loosening the flag thresholds."
         )
 
-    # For standard rows: sample evenly across question types so we get coverage
     standard_rows = _stratified_sample(standard_pool, n_standard)
 
-    # For edge cases: pick the weakest contexts (lowest overlap, shortest context)
+    # Pick edge cases with weakest contexts (lowest overlap, shortest context)
     edge_pool = edge_pool.copy()
     edge_pool["weakness_score"] = (
         (1 - edge_pool["overlap"]) * 0.6
@@ -193,11 +193,12 @@ def build_curated_benchmark(
     benchmark = benchmark.sample(frac=1, random_state=42).reset_index(drop=True)
     benchmark.insert(0, "sample_id", range(len(benchmark)))
 
-    keep_cols = ["sample_id", "question", "reference_answer", "context", "metadata",
-                 "subset_type", "question_type"]
     benchmark["subset_type"] = benchmark["edge_case_reason"].apply(
         lambda x: "edge_case" if x else "standard"
     )
+
+    keep_cols = ["sample_id", "question", "reference_answer", "context", "metadata",
+                 "subset_type", "question_type"]
     benchmark = benchmark[keep_cols]
 
     if save:
@@ -212,22 +213,25 @@ def build_curated_benchmark(
 def _stratified_sample(df: pd.DataFrame, n: int) -> pd.DataFrame:
     """
     Sample n rows with roughly equal coverage across question_type values.
-    Falls back to random if any type doesn't have enough rows.
+    Falls back to random sampling to top up if any type doesn't have enough rows.
     """
-    types = df["question_type"].value_counts()
+    types    = df["question_type"].value_counts()
     per_type = max(1, n // len(types))
 
-    sampled = []
+    sampled          = []
+    selected_indices = []  # original df indices tracked before any concat/reset
+
     for qtype, count in types.items():
         take = min(per_type, count)
-        sampled.append(df[df["question_type"] == qtype].sample(take, random_state=42))
+        rows = df[df["question_type"] == qtype].sample(take, random_state=42)
+        sampled.append(rows)
+        selected_indices.extend(rows.index.tolist())
 
     result = pd.concat(sampled, ignore_index=True)
 
-    # Top up if we're short
+    # Top up if short — use original indices to avoid resampling already selected rows
     if len(result) < n:
-        already_selected = result.index
-        remaining = df[~df.index.isin(already_selected)]
+        remaining = df[~df.index.isin(selected_indices)]
         shortfall = n - len(result)
         if len(remaining) >= shortfall:
             result = pd.concat(
@@ -255,7 +259,7 @@ def load_benchmark(csv_path: Optional[Path | str] = None) -> pd.DataFrame:
     df = pd.read_csv(path)
 
     required = ["sample_id", "question", "reference_answer", "context"]
-    missing = [c for c in required if c not in df.columns]
+    missing  = [c for c in required if c not in df.columns]
     if missing:
         raise DatasetError(f"Benchmark missing columns: {missing}")
 
