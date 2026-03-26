@@ -1,0 +1,19 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+#folders
+# /data
+
+#files
+.env
+digest.txt
+data/final_benchmark_50.csv
+data/Financial-QA-10k.csv

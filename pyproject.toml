@@ -1,0 +1,12 @@
+[project]
+name = "financial-qa-pipeline"
+version = "0.1.0"
+description = "AFinancial QA pipeline: GPT-4o-mini vs Gemini 2.5 Flash-Lite benchmark"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "bert-score>=0.3.13",
+    "openai>=2.30.0",
+    "pandas>=3.0.1",
+    "python-dotenv>=1.2.2",
+]

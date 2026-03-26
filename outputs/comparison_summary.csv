@@ -1,0 +1,3 @@
+model,total_rows,answered,abstentions,abstention_rate,edge_abstention_rate,avg_judge_total,avg_correctness,avg_completeness,avg_groundedness,avg_numeric_consistency,correct_answers (>=7/9),avg_latency_seconds,total_answer_cost_usd,total_judge_cost_usd,cost_per_correct_usd
+openai/gpt-4o-mini,50,41,9,0.18,0.6,8.05,2.76,2.34,2.95,0.443,36,1.706,0.0045,0.1636,0.00012
+google/gemini-2.5-flash-lite,50,44,6,0.12,0.4,8.55,2.84,2.73,2.98,0.677,41,0.87,0.0034,0.1635,8e-05

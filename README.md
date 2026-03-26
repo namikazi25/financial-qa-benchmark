@@ -1,0 +1,68 @@
+# Financial QA Pipeline
+
+A benchmark comparing GPT-4o-mini and Gemini 2.5 Flash-Lite on a 50-sample financial QA dataset from company 10-K filings. Evaluation uses an LLM-as-judge (Claude Sonnet 4.5), numeric consistency scoring, and BERTScore.
+
+## Setup
+
+```bash
+uv sync
+```
+
+Add a `.env` file in the project root:
+
+```
+OPENROUTER_API_KEY=your_key_here
+```
+
+Get your key at https://openrouter.ai. All three models are accessed through this single key.
+
+Download the raw dataset from Kaggle and place it at `data/Financial-QA-10k.csv`:
+https://www.kaggle.com/datasets/yousefsaeedian/financial-q-and-a-10k
+
+## Running
+
+Pre-generated outputs are already in `outputs/`. Run these steps only if reproducing from scratch.
+
+```bash
+# 1. Build the 50-row benchmark from the raw dataset
+python dataset.py
+
+# 2. Confirm all three API connections work
+python models.py
+
+# 3. Generate predictions from both models
+python main.py
+
+# 4. Score predictions with LLM-as-judge + numeric consistency
+python evaluate.py
+
+# 5. Run BERTScore locally (no API cost, ~400MB model download on first run)
+python bertscore.py
+```
+
+## Project Structure
+
+```
+├── data/
+│   ├── Financial-QA-10k.csv          # Raw source (not included, download from Kaggle)
+│   └── final_benchmark_50.csv        # Frozen 50-row benchmark
+├── outputs/
+│   ├── predictions_gpt4o_mini.jsonl
+│   ├── predictions_gemini_25_flash_lite.jsonl
+│   ├── evaluation_gpt4o_mini.jsonl
+│   ├── evaluation_gemini_25_flash_lite.jsonl
+│   ├── comparison_summary.csv
+│   └── bertscore_results.csv
+├── dataset.py
+├── prompts.py
+├── models.py
+├── main.py
+├── evaluate.py
+└── bertscore.py
+```
+
+## Cost
+
+Generation cost is low — around $0.004 per model for 50 rows. The judge step (Claude Sonnet 4.5) costs roughly $0.16 per model and dominates the benchmark cost, but that's evaluation overhead rather than serving cost.
+
+BERTScore runs locally at no cost.
