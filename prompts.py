@@ -1,10 +1,8 @@
 """
-prompts.py
-
 All prompt templates for the financial QA pipeline.
 
 Two prompt types:
-  1. Answer generation — used by both GPT-4o-mini and Gemini 2.5 Flash
+  1. Answer generation — used by both GPT-4o-mini and Gemini 2.5 Flash-Lite
   2. LLM-as-judge — used by Claude Sonnet 4.5 to score predictions
 
 Both models receive identical answer-generation prompts.
@@ -46,7 +44,7 @@ If abstain is true, answer must be null and confidence should be low (typically 
 def build_answer_prompt(question: str, context: str) -> str:
     """
     Build the user message for answer generation.
-    Same function used for both GPT-4o-mini and Gemini 2.5 Flash.
+    Same function used for both GPT-4o-mini and Gemini 2.5 Flash-Lite.
     """
     return f"""Context:
 {context}
@@ -69,7 +67,22 @@ You will be given:
 - A reference answer (ground truth)
 - A predicted answer from a model
 
-Your job is to score the predicted answer on three dimensions:
+== ABSTENTION SCORING — READ THIS FIRST ==
+
+If the predicted answer is ABSTAIN, you must decide whether abstention was correct BEFORE applying the rubric below.
+
+Step 1: Look at the context only (ignore the reference answer).
+Step 2: Ask — could a model reasonably answer the question from this context alone?
+
+If NO (context is empty, truncated, a raw table fragment with no headers, a garbled string, or otherwise genuinely insufficient):
+  → Abstention was CORRECT. Score: correctness=3, completeness=3, groundedness=3, total=9
+
+If YES (context contains enough information to answer):
+  → Abstention was UNNECESSARY. Score: correctness=1, completeness=1, groundedness=3, total=5
+
+Do not use the reference answer to judge whether the context was sufficient. Judge the context on its own.
+
+== STANDARD SCORING RUBRIC (for non-abstained answers only) ==
 
 1. CORRECTNESS (1-3)
    3 — Factually correct. All key claims match the reference and context.
@@ -90,10 +103,6 @@ Your job is to score the predicted answer on three dimensions:
    3 — Fully grounded. Every claim is traceable to the provided context.
    2 — Mostly grounded but includes a minor inference not directly in the context.
    1 — Contains information not present in the context, or contradicts the context.
-
-   Note: If the predicted answer is "ABSTAIN" or the model abstained, score as follows:
-   - If the context was genuinely insufficient: score 3/3/3 (correct to abstain)
-   - If the context was sufficient and the model abstained unnecessarily: score 1/1/3
 
 Output format:
 Respond with a single valid JSON object. No explanation outside the JSON.
@@ -120,14 +129,17 @@ def build_judge_prompt(
     """
     Build the user message for the judge.
 
-    Args:
-        question: The original question.
-        context: The source context from the benchmark.
-        reference_answer: Ground truth answer.
-        predicted_answer: Model's predicted answer, or None if abstained.
-        abstained: Whether the model chose to abstain.
+    For abstained predictions, the prompt explicitly flags this so the judge
+    applies the abstention scoring path before the standard rubric.
     """
-    prediction_text = "ABSTAIN" if abstained or predicted_answer is None else predicted_answer
+    if abstained or predicted_answer is None:
+        prediction_section = (
+            "Predicted answer: ABSTAIN\n\n"
+            "The model chose to abstain. Apply the ABSTENTION SCORING rules from your "
+            "instructions — evaluate whether the context was sufficient, then score accordingly."
+        )
+    else:
+        prediction_section = f"Predicted answer:\n{predicted_answer}"
 
     return f"""Question:
 {question}
@@ -138,8 +150,6 @@ Context:
 Reference answer:
 {reference_answer}
 
-Predicted answer:
-{prediction_text}
+{prediction_section}
 
-Score this prediction using the three-dimension rubric in your instructions.
 Respond with a single JSON object."""
