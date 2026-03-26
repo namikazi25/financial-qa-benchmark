@@ -8,13 +8,13 @@ A benchmark comparing GPT-4o-mini and Gemini 2.5 Flash-Lite on a 50-sample finan
 uv sync
 ```
 
-Add a `.env` file in the project root:
+Create a `.env` file in the project root:
 
-```
+```env
 OPENROUTER_API_KEY=your_key_here
 ```
 
-Get your key at https://openrouter.ai. All three models are accessed through this single key.
+Get your key from OpenRouter at https://openrouter.ai. All three models are accessed through this single key.
 
 Download the raw dataset from Kaggle and place it at `data/Financial-QA-10k.csv`:
 https://www.kaggle.com/datasets/yousefsaeedian/financial-q-and-a-10k
@@ -23,22 +23,24 @@ https://www.kaggle.com/datasets/yousefsaeedian/financial-q-and-a-10k
 
 Pre-generated outputs are already in `outputs/`. Run these steps only if reproducing from scratch.
 
+All commands below use `uv run` so they execute inside the project virtual environment.
+
 ```bash
 # 1. Build the 50-row benchmark from the raw dataset
 #    This creates data/final_benchmark_50.csv
-python dataset.py
+uv run python dataset.py
 
 # 2. Confirm all three API connections work
-python models.py
+uv run python models.py
 
 # 3. Generate predictions from both models
-python main.py
+uv run python main.py
 
 # 4. Score predictions with LLM-as-judge + numeric consistency
-python evaluate.py
+uv run python evaluate.py
 
 # 5. Run BERTScore locally (no API cost, ~400MB model download on first run)
-python bertscore.py
+uv run python bertscore.py
 ```
 
 ## Project Structure
