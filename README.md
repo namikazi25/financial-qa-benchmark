@@ -14,7 +14,7 @@ Create a `.env` file in the project root:
 OPENROUTER_API_KEY=your_key_here
 ```
 
-Get your key from OpenRouter at https://openrouter.ai. All three models are accessed through this single key.
+Create an OpenRouter API key at https://openrouter.ai and place it in .env as shown above. All three models are accessed through this single key.
 
 Download the raw dataset from Kaggle and place it at `data/Financial-QA-10k.csv`:
 https://www.kaggle.com/datasets/yousefsaeedian/financial-q-and-a-10k
