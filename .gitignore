@@ -17,3 +17,4 @@ wheels/
 digest.txt
 data/final_benchmark_50.csv
 data/Financial-QA-10k.csv
+.DS_Store
