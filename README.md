@@ -1,120 +1,159 @@
-# Financial QA Pipeline
+# Financial QA Benchmark
 
-A benchmark comparing GPT-4o-mini and Gemini 2.5 Flash-Lite on a 50-sample financial QA dataset from company 10-K filings. Evaluation uses an LLM-as-judge (Claude Sonnet 4.5), numeric consistency scoring, and BERTScore.
+**Evaluating LLMs for grounded financial question answering on 10-K filings.**
 
-## Results Summary
+![Python](https://img.shields.io/badge/Python-3.12-blue)
+![License](https://img.shields.io/badge/License-MIT-green)
+![Models](https://img.shields.io/badge/Models-GPT--4o--mini%20%7C%20Gemini%202.5%20Flash--Lite-orange)
+![Judge](https://img.shields.io/badge/Judge-Claude%20Sonnet%204.5-purple)
+
+A production-grade evaluation pipeline comparing two cost-optimized LLMs on financial question answering. Features a curated 50-sample benchmark (40 standard + 10 adversarial edge cases), multi-metric evaluation via LLM-as-judge, numeric consistency scoring, and BERTScore.
+
+Built with: **Python** · **OpenRouter** · **structured logging** · **YAML config** · **Makefile automation**
+
+---
+
+## Results
 
 | Metric | GPT-4o-mini | Gemini 2.5 Flash-Lite |
 |--------|:-----------:|:---------------------:|
-| Avg Judge Score (out of 9) | 8.10 | **8.55** |
+| Avg Judge Score (/9) | 8.10 | **8.55** |
 | Correct Answers (>=7/9) | 36 / 50 | **41 / 50** |
-| Avg Numeric Consistency | 0.443 | **0.677** |
-| Abstention Rate | 18% | **12%** |
-| Edge-Case Abstention Rate | **60%** | 40% |
-| Avg Latency (s) | 1.71 | **0.87** |
-| Total Answer Cost | $0.0045 | **$0.0034** |
-| Total Judge Cost | $0.1848 | **$0.1833** |
+| Numeric Consistency | 0.443 | **0.677** |
+| Avg Latency | 1.71s | **0.87s** |
+| Cost per Correct Answer | $0.00012 | **$0.00008** |
+| Edge-Case Abstention | **60%** | 40% |
 
-Gemini 2.5 Flash-Lite leads on overall accuracy, numeric precision, speed, and cost. GPT-4o-mini is more conservative on edge cases (higher abstention rate on weak contexts).
+**Recommendation:** Gemini 2.5 Flash-Lite for production financial QA. Higher accuracy, better numeric precision, 2x faster, 25% cheaper. GPT-4o-mini is more conservative on broken context (higher abstention), which suits deployments where avoiding unsupported answers is critical.
 
-## Design Decisions
+---
 
-- **Why LLM-as-judge over BLEU/ROUGE**: Financial QA answers can be semantically equivalent while using different phrasing. BLEU/ROUGE penalize valid paraphrases. An LLM judge evaluates semantic correctness, completeness of qualifiers (units, time periods), and groundedness in context.
+## Pipeline Architecture
 
-- **Why Claude as neutral third-party judge**: Using GPT-4 to judge GPT-4o-mini or Gemini to judge Gemini introduces self-serving bias. Claude Sonnet 4.5 is independent of both answer-generation models.
+```
+┌─────────────────┐     ┌──────────────────────┐     ┌─────────────────────┐     ┌──────────────┐
+│ Dataset Curation │────>│  Answer Generation   │────>│   LLM-as-Judge      │────>│   Analysis   │
+│                  │     │                      │     │                     │     │              │
+│ 40 standard      │     │ GPT-4o-mini          │     │ Claude Sonnet 4.5   │     │ Judge scores │
+│ 10 edge cases    │     │ Gemini Flash-Lite    │     │ Correctness (1-3)   │     │ Numeric cons │
+│ Stratified by    │     │ Identical prompts    │     │ Completeness (1-3)  │     │ BERTScore    │
+│ question type    │     │ JSON enforced        │     │ Groundedness (1-3)  │     │ Cost/latency │
+└─────────────────┘     └──────────────────────┘     └─────────────────────┘     └──────────────┘
+```
 
-- **Why 40 standard + 10 edge cases**: Standard rows test core QA quality. Edge cases (truncated context, sparse tables, low overlap) test whether models abstain appropriately rather than hallucinating. The 80/20 split oversamples edge cases deliberately to stress-test abstention behavior.
+---
 
-- **Why numeric consistency as a separate metric**: In 10-K filings, getting the exact dollar amount, percentage, or share count right matters more than prose quality. A separate metric catches cases where the judge gives high scores but the model paraphrased "$14.16 per diluted share" as "approximately $14".
+## Key Design Decisions
 
-## Setup
+### Why LLM-as-judge over BLEU/ROUGE?
+Financial answers can be semantically equivalent with different phrasing. "$1.35 billion" and "$1.35B" mean the same thing but BLEU scores them as different. An LLM judge evaluates meaning, not string overlap.
+
+### Why a neutral third-party judge?
+Using GPT to judge GPT introduces self-serving bias. Claude Sonnet 4.5 is independent of both answer models.
+
+### Why 40 standard + 10 edge cases?
+Standard rows test core QA quality. Edge cases (truncated context, sparse tables, empty fields) test whether models abstain rather than hallucinate. The 80/20 split deliberately oversamples adversarial inputs.
+
+### Why numeric consistency as a separate metric?
+In 10-K filings, the exact dollar amount matters. The judge might score a paraphrase highly, but if "$14.16 per diluted share" became "approximately $14", the number is wrong. Regex extraction catches this independently.
+
+---
+
+## Notable Failure Cases
+
+**Sample 17 -- Table-format context (Americas net revenue %)**
+- Gemini extracted both years and direction of change -> 9/9
+- GPT-4o-mini returned only "79.3%", missed the 2022 comparison -> 6/9
+- *Insight: Gemini handles sparse tabular context better*
+
+**Sample 44 -- Unnecessary abstention**
+- GPT-4o-mini abstained despite sufficient context -> lost points
+- Gemini answered correctly -> 7/9
+- *Insight: GPT-4o-mini is over-cautious on ambiguous but answerable rows*
+
+**Sample 16 -- Correct abstention (context: "Gothia")**
+- Both models correctly abstained on garbled context
+- *Insight: Abstention logic works when context is genuinely insufficient*
+
+---
+
+## Engineering Principles
+
+- **Structured logging** over print statements -- configurable verbosity via `config.yaml`, file + console output
+- **Externalized configuration** -- all thresholds, paths, model IDs, and delays in `config.yaml`, not hardcoded
+- **Reproducible by default** -- pre-generated outputs committed, `uv.lock` pinned, `Makefile` for one-command runs
+- **Separation of concerns** -- prompts, models, evaluation, and analysis in separate modules
+- **Type-safe config** -- dataclass-based config loader with validation on startup
+
+---
+
+## Quick Start
 
 ```bash
 make setup
 ```
 
-Create a `.env` file in the project root:
-
-```env
+Create `.env`:
+```
 OPENROUTER_API_KEY=your_key_here
 ```
 
-Create an OpenRouter API key at https://openrouter.ai and place it in .env as shown above. All three models are accessed through this single key.
-
-Download the raw dataset from Kaggle and place it at `data/Financial-QA-10k.csv`:
-https://www.kaggle.com/datasets/yousefsaeedian/financial-q-and-a-10k
-
-## Running
-
-Pre-generated outputs are already in `outputs/`. Run these steps only if reproducing from scratch.
+Download dataset from [Kaggle](https://www.kaggle.com/datasets/yousefsaeedian/financial-q-and-a-10k) -> `data/Financial-QA-10k.csv`
 
 ```bash
-# Full pipeline (dataset -> models test -> predictions -> judge -> BERTScore)
-make run
-
-# Or run individual steps:
-uv run python dataset.py     # Build the 50-row benchmark
-uv run python models.py      # Confirm API connections
-uv run python main.py        # Generate predictions
-uv run python evaluate.py    # LLM-as-judge + numeric consistency
-uv run python bertscore.py   # BERTScore (local, no API cost)
+make run        # Full pipeline
+make evaluate   # Judge only
+make bertscore  # BERTScore only
+make lint       # Ruff check
 ```
+
+Pre-generated outputs are in `outputs/` if you want to inspect results without API calls.
+
+---
 
 ## Configuration
 
-All tunable parameters are in `config.yaml`:
+All tunable parameters live in [`config.yaml`](config.yaml):
 
-- **logging**: Log level (DEBUG/INFO/WARNING/ERROR), log directory, log filename
-- **dataset**: Raw data path, benchmark path, standard/edge-case sample counts
-- **models**: Model identifiers (OpenRouter format), API base URL, temperature, max tokens, retries, fallback cost table
-- **pipeline**: Output directory, delay between API calls
-- **evaluation**: Judge delay, correctness threshold (score >= 7/9), summary file path
-- **bertscore**: Model name (distilbert-base-uncased), output file path
+- **logging:** level, directory, filename
+- **dataset:** paths, sample counts (40 standard / 10 edge)
+- **models:** identifiers, temperature, max tokens, retries, cost table
+- **pipeline:** output paths, API call delays
+- **evaluation:** judge threshold (>=7/9), summary path
+- **bertscore:** model name, output path
 
-Secrets (API keys) stay in `.env` and are never committed.
+Secrets stay in `.env` and are never committed.
+
+---
 
 ## Project Structure
 
 ```
-├── config.yaml                           # All tunable parameters
-├── config.py                             # Dataclass config loader
-├── logger.py                             # Shared logging setup
-├── Makefile                              # Build targets
-├── data/
-│   ├── Financial-QA-10k.csv              # Raw source (download from Kaggle)
-│   └── final_benchmark_50.csv            # Generated by dataset.py
-├── outputs/
-│   ├── predictions_gpt4o_mini.jsonl
-│   ├── predictions_gemini_25_flash_lite.jsonl
-│   ├── evaluation_gpt4o_mini.jsonl
-│   ├── evaluation_gemini_25_flash_lite.jsonl
-│   ├── comparison_summary.csv
-│   ├── bertscore_results.csv
-│   └── logs/pipeline.log
-├── dataset.py                            # Benchmark construction
-├── prompts.py                            # Prompt templates
-├── models.py                             # OpenRouter API interface
-├── main.py                               # Answer generation pipeline
-├── evaluate.py                           # LLM-as-judge + numeric consistency
-└── bertscore.py                          # BERTScore computation
+├── config.yaml              # All tunable parameters
+├── config.py                # Dataclass config loader
+├── logger.py                # Shared logging setup
+├── Makefile                 # Build/run/lint targets
+├── dataset.py               # Benchmark curation (40+10 split)
+├── prompts.py               # Answer + judge prompt templates
+├── models.py                # OpenRouter API interface
+├── main.py                  # Answer generation pipeline
+├── evaluate.py              # LLM-as-judge + numeric consistency
+├── bertscore.py             # BERTScore computation
+├── data/                    # Raw + curated benchmark
+└── outputs/                 # All prediction and evaluation artifacts
 ```
+
+---
 
 ## Cost
 
-Generation cost is low -- around $0.004 per model for 50 rows. The judge step (Claude Sonnet 4.5) costs roughly $0.16 per model and dominates the benchmark cost, but that's evaluation overhead rather than serving cost.
+Generation: ~$0.004 per model (50 rows). Judge: ~$0.16 per model (Claude Sonnet 4.5). BERTScore: free (local). Total benchmark cost under $0.40.
 
-BERTScore runs locally at no cost.
-
-## What I Learned
-
-- **Use logging, not print, for production code** -- structured logging with levels makes it easy to control verbosity and pipe output to files without changing code.
-- **Externalize all config for reusability** -- hardcoded paths, thresholds, and model IDs make code brittle and hard to adapt. A single config.yaml makes the pipeline configurable without code changes.
-- **LLM-as-judge needs careful abstention handling** -- without explicit abstention scoring rules, the judge inconsistently scored correct abstentions, producing a 5/9 "uncanny valley". The two-path rubric (correct vs unnecessary abstention) fixed this.
-- **50 samples is directional, not conclusive** -- enough to identify trends and validate the evaluation framework, but not enough for statistical significance. A production benchmark would need 500+ samples with human annotations.
+---
 
 ## Limitations
 
-- 50 samples is a small benchmark -- findings are directional, not statistically conclusive
-- Benchmark selection is heuristic-based (overlap scoring, length thresholds) rather than human-annotated by multiple reviewers
-- LLM-as-judge introduces some subjectivity even with a neutral third-party model; scores should be treated as indicative rather than ground truth
-- Edge cases are intentionally overrepresented (10 of 50 rows) relative to their natural frequency in the dataset, which inflates abstention rates compared to a production distribution
+- 50 samples is directional, not statistically conclusive
+- Benchmark selection is heuristic-based, not human-annotated
+- LLM-as-judge scores are indicative, not ground truth
+- Edge cases intentionally overrepresented vs production distribution
