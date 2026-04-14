@@ -1,0 +1,46 @@
+# Financial QA Pipeline Configuration
+# All tunable parameters in one place. Secrets (.env) are loaded separately.
+
+logging:
+  level: INFO
+  log_dir: outputs/logs
+  log_file: pipeline.log
+
+dataset:
+  raw_data_file: data/Financial-QA-10k.csv
+  benchmark_file: data/final_benchmark_50.csv
+  standard_count: 40
+  edge_case_count: 10
+
+models:
+  gpt4o_mini: openai/gpt-4o-mini
+  gemini_25_flash_lite: google/gemini-2.5-flash-lite
+  claude_sonnet_45: anthropic/claude-sonnet-4-5
+  api_base_url: https://openrouter.ai/api/v1
+  default_temperature: 0.0
+  default_max_tokens: 512
+  default_retries: 3
+  # Fallback pricing (USD per 1M tokens) — used when OpenRouter doesn't report cost
+  cost_per_1m:
+    openai/gpt-4o-mini:
+      input: 0.15
+      output: 0.60
+    google/gemini-2.5-flash-lite:
+      input: 0.10
+      output: 0.40
+    anthropic/claude-sonnet-4-5:
+      input: 3.00
+      output: 15.00
+
+pipeline:
+  outputs_dir: outputs
+  delay_between_calls: 1.0  # seconds between API calls
+
+evaluation:
+  delay_between_calls: 1.5  # seconds — Claude judge needs more breathing room
+  judge_correct_threshold: 7  # out of 9 total to count as "correct"
+  summary_file: outputs/comparison_summary.csv
+
+bertscore:
+  model: distilbert-base-uncased
+  output_file: outputs/bertscore_results.csv

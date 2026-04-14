@@ -1,9 +1,8 @@
-"""
-All prompt templates for the financial QA pipeline.
+"""Prompt templates for the financial QA pipeline.
 
 Two prompt types:
-  1. Answer generation — used by both GPT-4o-mini and Gemini 2.5 Flash-Lite
-  2. LLM-as-judge — used by Claude Sonnet 4.5 to score predictions
+  1. Answer generation -- used by both GPT-4o-mini and Gemini 2.5 Flash-Lite
+  2. LLM-as-judge -- used by Claude Sonnet 4.5 to score predictions
 
 Both models receive identical answer-generation prompts.
 The difference in outputs comes from the model, not the instructions.
@@ -42,9 +41,16 @@ If abstain is true, answer must be null and confidence should be low (typically 
 
 
 def build_answer_prompt(question: str, context: str) -> str:
-    """
-    Build the user message for answer generation.
+    """Build the user message for answer generation.
+
     Same function used for both GPT-4o-mini and Gemini 2.5 Flash-Lite.
+
+    Args:
+        question: The financial question to answer.
+        context: The source context from the 10-K filing.
+
+    Returns:
+        Formatted user message string.
     """
     return f"""Context:
 {context}
@@ -126,11 +132,20 @@ def build_judge_prompt(
     predicted_answer: str | None,
     abstained: bool = False,
 ) -> str:
-    """
-    Build the user message for the judge.
+    """Build the user message for the LLM judge.
 
     For abstained predictions, the prompt explicitly flags this so the judge
     applies the abstention scoring path before the standard rubric.
+
+    Args:
+        question: The financial question.
+        context: The source context from the filing.
+        reference_answer: Ground truth answer.
+        predicted_answer: Model's predicted answer, or None if abstained.
+        abstained: Whether the model chose to abstain.
+
+    Returns:
+        Formatted judge prompt string.
     """
     if abstained or predicted_answer is None:
         prediction_section = (

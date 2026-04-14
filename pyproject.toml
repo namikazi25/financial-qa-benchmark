@@ -9,4 +9,21 @@ dependencies = [
     "openai>=2.30.0",
     "pandas>=2.2,<3",
     "python-dotenv>=1.2.2",
+    "pyyaml>=6.0",
 ]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.11",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W"]
+
+[tool.ruff.lint.per-file-ignores]
+# Prompt templates contain long lines that cannot be wrapped without changing API input
+"prompts.py" = ["E501"]
